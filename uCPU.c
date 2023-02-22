@@ -81,7 +81,7 @@ int main() {
 	loadInstructions();
 
 	//holds 1 or 0
-	int zeroFlag;
+	int zeroFlag = 0;
 	while(pc < NUM_MEMORY) {
 		//obtain 16 bit instruction
 		int instruction = memory[pc] * pow(16, 2) + memory[pc + 1];
@@ -141,7 +141,7 @@ int main() {
 			int operand1 = (instruction / 16) % 16;
 			int operand2 = instruction % 16;
 
-			registers[dest] = registers[operand1] | registers[operand2];
+			registers[dest] = registers[operand1] << registers[operand2];
 		}
 
 		//procces LSR  operation
@@ -171,25 +171,32 @@ int main() {
 		else if(opcode == 8) {
 
 			int dest = (instruction / (int)pow(16,2)) % 16;
-			int memReg = (instruction / 16) % 16;		//specifies the register containing the memory address to be loaded
+			int memRegister = (instruction / 16) % 16;		//specifies the register containing the memory address to be loaded
 
 			/*
 				For the LDR and STR operations, how many bytes of memory do we load into the destination register? Or do we just load a single byte of memory?
 					Answer: load in a word [2 bytes]
 			*/
 
-			
+			//get the memory address stored in the register "memRegister"
+			int16_t memAddress = registers[memRegister];
+
+			//store the value in memory[memAddress] through memory[Address+1] in the destination register
+			registers[dest] = (memory[memAddress] * pow(16, 2) ) + memory[memAddress + 1]; //converts two seperate consecutive bytes into one word
 
 		}
 		//process STR
 		else if(opcode == 9) {
 
-			int dest = (instruction / (int)pow(16,2)) % 16;
-			int memReg = (instruction / 16) % 16;		//specifies the register containing the memory address to be loaded
-			/*
-				For the LDR and STR operations, how many bytes of memory do we load into the destination register? Or do we just load a single byte of memory?
+			int sourceReg = (instruction / (int)pow(16,2)) % 16; //specifies the register holding our source data
+			int destReg = (instruction / 16) % 16;		//specifies the register containing the memory address where we will store our data
 
-			*/
+
+			int16_t memAddress = registers[destReg];
+
+			memory[memAddress] = (registers[sourceReg] & 0xFF00) >> 8;	//store first byte in "starting" memAddress
+			memory[memAddress + 1] = registers[sourceReg] & 0x00FF;	//store second byte in the address after the "starting" address (ie start address + 1)
+
 		}
 
 		//process CMP instruction
@@ -222,10 +229,10 @@ int main() {
 				constant = constant | 0xFFFFF000;
 
 
-			/*
+			pc += constant;
 
-				COME BACK AND FINISH THIS INSTRUCTION
-			*/
+			//break to prevent changing pc further
+			continue;
 		}
 		//BEQ Instruction
 		else if(opcode == 13) {
@@ -235,16 +242,21 @@ int main() {
 			if(( (instruction / (int) pow(16,2) ) % 16) >= 8 )	//if constant should be interpreted as negative (first hex digit of the 3 is 8 or greater meaning there is a 1 in the sign bit
 				constant = constant | 0xFFFFF000;
 
-
-			/*
-
-				COME BACK AND FINISH THIS INSTRUCTION
-			*/
+			if(zeroFlag) {
+				pc += constant;
+				continue;
+			}
 		}
 		//END instruction
 		else if(opcode == 14) {
 			break;
 		}
+
+
+
+		//Process NOP
+			//do literally nothing
+
 
 		//move PC to next instruction [two bytes fowards]
 		pc += 2;
@@ -276,7 +288,7 @@ void loadInstructions() {
 void printDump() {
 
 	//print 16 registers
-	for(int count = 0; count < NUM_REGISTERS - 1; count++) {
+	for(int count = 0; count < NUM_REGISTERS; count++) {
 
 		printf("register %3d: 0x%.4X \n", count, registers[count] & 0xFFFF);
 	}
@@ -289,7 +301,7 @@ void printDump() {
 	for(int count = 0; count < NUM_MEMORY; count++) {
 		if((count % 16) == 0) {
 			//print new line and next lines memory address "header"
-			printf("\n0x%.4X:   ", count);
+			printf("\n0x%.4X:  ", count);
 		}
 
 		printf("%.2X", memory[count]);
